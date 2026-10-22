@@ -1,0 +1,7 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #fafaf8; color: #1f2937; font: 16px/1.6 system-ui, sans-serif; }
+.page { max-width: 760px; margin: 12vh auto; padding: 0 24px; }
+h1 { margin: 8px 0 14px; font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; letter-spacing: -0.04em; }
+p { max-width: 60ch; }
+.eyebrow { color: #2563eb; font-weight: 700; font-size: .86rem; letter-spacing: .05em; text-transform: uppercase; }
+.status { margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 16px; }
