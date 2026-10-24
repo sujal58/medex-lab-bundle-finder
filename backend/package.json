@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "npm run build && node --test test/catalog.test.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -19,5 +20,7 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.8.3"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

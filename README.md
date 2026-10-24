@@ -1,13 +1,13 @@
 # MedEx — Lab Test Bundle Finder
 
-Full-stack take-home assessment, **Task 1**. This is the initial project scaffold, not a finished submission.
+Full-stack take-home assessment, **Task 1**. Work in progress: catalog endpoints and normalization are implemented; planning and the final UI are still pending.
 
 ## Progress
 
 - [x] Monorepo directory structure and original `lab-catalog.json` dataset
 - [x] NestJS API scaffold and `GET /api/health` development endpoint
 - [x] React + Vite frontend scaffold and API connectivity indicator
-- [ ] Normalize the catalog and implement `GET /api/tests`, `GET /api/packages`
+- [x] Normalize the catalog and implement `GET /api/tests`, `GET /api/packages`
 - [ ] Implement and test exact minimum-cost planner (`POST /api/plan`)
 - [ ] Add official fixture tests and edge cases
 - [ ] Build test search, selection, plan explanation, and error states
@@ -40,21 +40,45 @@ npm run dev
 Open `http://localhost:5173`. The UI requests `/api/health` using Vite's development proxy.
 This health endpoint is **scaffold-only** and is not part of the required assessment API.
 
-## Required API (not implemented yet)
+## API
 
-- `GET /api/tests`
-- `GET /api/packages`
-- `POST /api/plan`
+- `GET /api/tests` — active tests, including those only available in a package (`price: null`)
+- `GET /api/packages` — active packages, with duplicate/unknown test IDs cleaned up
+- `POST /api/plan` — not implemented yet (next milestone)
 
 The implementation must reproduce the exact supplied expected outputs and use the specified tie-breaking order.
 
 ## Assumptions and limitations
 
-This commit intentionally does **not** implement the optimizer, catalog endpoints, the final UI, or the required tests. It only establishes the runnable full-stack structure.
+Current stage implements catalog loading and both catalog endpoints. The optimizer and final UI are not implemented yet.
+
+Catalog handling assumptions:
+- Ignore repeated test references inside a package, preserving the first occurrence and original order.
+- Ignore nonexistent test references in packages (`P12` lists `T99`).
+- Remove inactive test references from packages because customers cannot select those tests.
+- Hide inactive tests (`T19`) and packages (`P10`) from their respective listing endpoints.
+- A package with no valid tests after cleanup is omitted from the available-package listing.
+- Keep the supplied JSON dataset unchanged. Reject malformed records and duplicate entity IDs early.
+
+These decisions will be kept consistent with the planner and reviewed against MedEx's expected outputs.
+
+## Backend checks (this stage)
+
+```bash
+cd backend
+npm install
+npm test
+npm run dev
+```
+
+Expected: nine catalog normalization checks pass. You can also visit:
+
+- `http://localhost:3001/api/tests` (19 active tests)
+- `http://localhost:3001/api/packages` (12 active packages)
 
 ## AI-assistance disclosure
 
-ChatGPT assisted with initial scaffolding, project structure, and setup documentation. Subsequent AI use will be documented here as work progresses. All implementation decisions, functionality, and test results will be reviewed and verified before submission.
+ChatGPT assisted with initial scaffolding, project structure, catalog loading/normalization code, and test suggestions. Subsequent AI use will be documented here as work progresses. The applicant will review, test and explain the submitted code.
 
 ## Development history
 
