@@ -1,182 +1,212 @@
 # MedEx — Lab Test Bundle Finder
 
-Full-stack take-home assessment, **Task 1**. Work in progress: the catalog API, exact optimizer, planning API and live React recommendation display are implemented; final integrated verification and accessibility/performance checks remain.
+A full-stack implementation of **Task 1: Lab Test Bundle Finder** for the MedEx Full-Stack Developer Internship assessment.
 
-## Progress
+Customers select lab tests, and the application finds the **lowest-cost combination of available packages and individual tests** that covers every selection. It also explains what each purchase covers, which additional tests are included, and how much the customer saves when an individual-price comparison is possible.
 
-- [x] Monorepo directory structure and original `lab-catalog.json` dataset
-- [x] NestJS API scaffold and `GET /api/health` development endpoint
-- [x] React + Vite frontend scaffold (replaced the initial API connectivity placeholder in Commit 5)
-- [x] Normalize the catalog and implement `GET /api/tests`, `GET /api/packages`
-- [x] Implement exact minimum-cost planner as a pure TypeScript function
-- [x] Add all three official fixture tests and algorithm edge-case tests
-- [x] Expose and validate `POST /api/plan` through NestJS
-- [x] Build accessible test search, selected-test chips, removal, empty/loading/catalog error states and retry
-- [x] Connect live optimization requests, explain packages/coverage/bonuses/total/savings
-- [x] Handle stale responses, network/planner errors and retries in the frontend
-- [ ] Verify the full app in a browser, performance, accessibility and 375 px layout
+## Tech stack
 
-## Project layout
+| Component | Technology |
+| --- | --- |
+| Backend | Node.js 22+, TypeScript, NestJS |
+| Frontend | React, TypeScript, Vite, CSS |
+| Data | Supplied `data/lab-catalog.json`, loaded into memory |
+| Tests | Node.js built-in test runner; HTTP integration, algorithm, catalog, and frontend helper tests |
 
-- `backend/` — NestJS + TypeScript API (port 3001)
-- `frontend/` — React + Vite + TypeScript UI (port 5173)
-- `data/lab-catalog.json` — supplied MedEx catalog, kept unchanged
+No database is needed for this read-only catalog and calculation exercise.
 
-## Run locally
+## Project structure
 
-Requirements: Node.js 22+ and npm.
+```text
+backend/
+  src/
+    catalog/      # Catalog validation, normalization and listing endpoints
+    planner/      # Exact optimizer and POST /api/plan
+  test/           # Catalog, planner and HTTP integration tests
+frontend/
+  src/
+    App.tsx       # Search, selection and recommendation UI
+    selection.ts  # Test filtering and selection helpers
+    planner.ts    # API contract, errors and stale-request handling
+  test/           # Selection and planner helper tests
+data/
+  lab-catalog.json  # Original supplied dataset (unchanged)
+README.md
+```
+
+## Getting started
+
+**Requirements:** Node.js 22 or later and npm.
+
+Start the backend:
 
 ```bash
-# Terminal 1
 cd backend
-npm install
+npm ci
 npm run dev
+```
+
+In another terminal, start the frontend:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open **http://localhost:5173**. The NestJS API runs at **http://localhost:3001**. Vite proxies `/api` requests to the backend, so both servers must be running in development.
+
+### Build and test
+
+From the project root, run separately:
+
+```bash
+cd backend
+npm test
+npm run build
 ```
 
 ```bash
-# Terminal 2
 cd frontend
-npm install
-npm run dev
+npm test
+npm run build
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api/*` requests to `http://localhost:3001`; the frontend calls both `GET /api/tests` and `POST /api/plan` when tests are selected. The original `GET /api/health` endpoint remains for development diagnostics only.
+The backend tests cover the provided examples, catalog normalization, optimization edge cases, HTTP response bodies and error statuses. Frontend tests cover search/selection logic, response validation, and stale/failed requests. The application was also manually exercised locally, including mobile-width layout, rapid selection changes, and network-error/retry states. These are local checks, not an automated browser E2E suite.
 
 ## API
 
-- `GET /api/tests` — active tests, including those only available in a package (`price: null`)
-- `GET /api/packages` — active packages, with duplicate/unknown test IDs cleaned up
-- `POST /api/plan` — accepts `{ "testIds": ["T02", "T03"] }` and returns the cheapest plan (HTTP `200`)
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/api/tests` | Return active, selectable tests (including package-only tests with `price: null`) |
+| `GET` | `/api/packages` | Return active, normalized packages |
+| `POST` | `/api/plan` | Find the cheapest valid purchase plan |
+| `GET` | `/api/health` | Additional development diagnostic endpoint |
 
-The implementation must reproduce the exact supplied expected outputs and use the specified tie-breaking order.
-
-## Assumptions and limitations
-
-Current stage implements catalog loading, both catalog endpoints, the pure optimizer, `POST /api/plan`, and a responsive test-selection UI with live recommendations. Further browser integration, accessibility and performance verification are still required.
-
-Catalog handling assumptions:
-- Ignore repeated test references inside a package, preserving the first occurrence and original order.
-- Ignore nonexistent test references in packages (`P12` lists `T99`).
-- Remove inactive test references from packages because customers cannot select those tests.
-- Hide inactive tests (`T19`) and packages (`P10`) from their respective listing endpoints.
-- A package with no valid tests after cleanup is omitted from the available-package listing.
-- Keep the supplied JSON dataset unchanged. Reject malformed records and duplicate entity IDs early.
-
-These decisions will be kept consistent with the planner and reviewed against MedEx's expected outputs.
-
-## Planner algorithm (Commit 3)
-
-`backend/src/planner/plan.ts` implements an **exact**, not greedy, minimum-cost plan for the small supplied catalog:
-
-1. Deduplicate requested test IDs, preserving their first-occurrence order. Reject unknown/inactive selections.
-2. Take only active packages covering at least one requested test. A test with `price: null` must be obtainable from a package.
-3. Give each requested test a bit in a bitmask. Enumerate every combination of the relevant packages (at most 12 for this catalog), and compute the tests covered by each combination.
-4. Purchase every still-uncovered test individually, if possible. Collect distinct bonus tests supplied by the chosen packages.
-5. Choose a plan by **(a)** lowest cost, **(b)** fewest purchased items, **(c)** fewest distinct extra tests, and **(d)** alphabetical comparison of sorted item IDs.
-6. Return sorted items, each item's `covers` in the original selection order, total, extra tests, individual purchase total (or `null`) and savings (or `null`).
-
-All values in this dataset are whole Thai baht, so integer sums are exact.
-
-**Performance/scalability:** Exhaustively enumerating subsets costs roughly `O(2^P × P × T)` in this implementation, where `P` is the number of relevant packages and `T` the selected-test count. For the supplied 13-package catalog, one package is inactive, so at most `2^12 = 4,096` subsets are examined. The slowest planner check against the full catalog took less than 300 ms in the development environment, but the actual deployment environment must also be measured. With 40 relevant packages, `2^40` combinations would be infeasible; this would require redesigning the search (for example, branch-and-bound or coverage-mask dynamic programming with tie-break-aware state). This implementation explicitly rejects inputs with more than 20 relevant packages or 30 selected tests rather than silently returning a slow or incorrect answer.
-
-## Planning API (Commit 4)
-
-The planner endpoint uses a small NestJS controller/service/module layer over the pure `calculatePlan()` function.
+Example:
 
 ```http
 POST /api/plan
 Content-Type: application/json
 
-{ "testIds": ["T02", "T03", "T04", "T06"] }
+{"testIds":["T02","T03","T04","T06"]}
 ```
 
-A successful response (`200`) contains `items`, `total`, `extraTests`, `individualTotal`, and `savings`, exactly as in the supplied examples. `items` are sorted by ID; each item's `covers` lists requested tests in original selection order.
+A successful `200` response contains exactly these fields:
 
-Error responses use the assignment's schema `{ "error": "<CODE>", "testIds": [...] }`:
+- `items`: purchased packages and/or individual tests, sorted by ID; each item's `covers` array follows selected-test order
+- `total`: the total purchase price in whole Thai baht
+- `extraTests`: additional included tests not selected by the customer, sorted by ID
+- `individualTotal`: cost of buying all selected tests individually, or `null` if impossible
+- `savings`: `individualTotal - total`, or `null` when there is no individual comparison
 
-- `400 EMPTY_SELECTION`: missing or empty `testIds`.
-- `400 INVALID_TESTS`: unknown or inactive test IDs, reported once each in selection order.
-- `422 NOT_AVAILABLE`: a valid selected test cannot be obtained individually or through an active package.
-- **Assumption for malformed requests:** non-array `testIds` or arrays containing non-strings return `400 INVALID_TESTS` with `testIds: []`, since non-string values cannot be identified as test IDs. Extra request properties are ignored.
+Errors follow the assessment format, `{ "error": "<CODE>", "testIds": [...] }`:
 
-The API returns HTTP `200` for successful POST requests instead of NestJS's default `201`. Unexpected server failures are not disguised as validation errors.
+| HTTP status | Code | Meaning |
+| --- | --- | --- |
+| `400` | `EMPTY_SELECTION` | No tests selected |
+| `400` | `INVALID_TESTS` | Unknown or inactive test IDs |
+| `422` | `NOT_AVAILABLE` | Selected tests cannot all be obtained |
 
-To verify manually while the backend runs:
+For malformed types, non-array or non-string `testIds` are treated as `INVALID_TESTS` with an empty ID list. Missing `testIds` produces `EMPTY_SELECTION`. Unexpected server errors remain server errors.
 
-```bash
-curl -i -X POST http://localhost:3001/api/plan \
-  -H "Content-Type: application/json" \
-  -d '{"testIds":["T02","T03","T04","T06"]}'
-```
+## Optimization approach
 
-Automated HTTP integration tests start the actual NestJS application on an ephemeral localhost port and compare every official example with the exact JSON response. They also check both catalog endpoints and validation behavior.
+The core implementation is `backend/src/planner/plan.ts`, exposed as a pure `calculatePlan()` function. The optimizer uses **exact subset enumeration**, not a greedy discount heuristic:
 
-## Backend checks (this stage)
+1. Remove duplicate selected IDs while preserving selection order. Reject unknown or inactive tests.
+2. Consider active packages covering at least one requested test.
+3. Represent requested tests as bits in a bitmask. Enumerate all combinations of relevant packages.
+4. For each combination, add individually purchasable selected tests not already covered. Reject combinations that leave a package-only test uncovered.
+5. Collect distinct extra tests included in the chosen packages.
+6. Choose the best valid candidate by MedEx's required ranking: **lowest total**, then **fewest purchased items**, then **fewest extra tests**, then the **alphabetically earliest sorted list of item IDs**.
+7. Return purchases sorted by ID with each item's selected-test coverage in the original selection order.
 
-```bash
-cd backend
-npm install
-npm test
-npm run dev
-```
+An additional covered test is not purchased individually: it would increase the item count and cannot improve a nonnegative-price solution. All catalog prices are integer Thai baht, so calculations use exact integer addition rather than floating-point currency arithmetic.
 
-Expected: **35 checks** — nine catalog normalization checks, 16 planner checks, and ten API integration checks (including three official examples through HTTP). The complete NestJS integration suite must be verified locally. You can also visit:
+### Performance and Scalability
 
-- `http://localhost:3001/api/tests` (19 active tests)
-- `http://localhost:3001/api/packages` (12 active packages)
-- `POST http://localhost:3001/api/plan` (send JSON as shown above)
+The bundle optimizer uses exact subset enumeration with bitmasks to find the minimum-cost combination of lab packages and individual tests.
 
-## Frontend selection interface (Commit 5)
+**Time complexity:** Approximately `O(2^P × P × T)`, where `P` is the number of relevant packages and `T` is the number of selected tests.
 
-`frontend/src/App.tsx` fetches the selectable catalog from `GET /api/tests`, with distinct loading, success, empty-results and connection-error states. The app provides:
+The supplied catalog contains 13 packages, of which 12 are active. Consequently, the algorithm evaluates at most 4,096 package combinations, making exhaustive optimization practical for the given dataset.
 
-- Case-insensitive, whitespace-tolerant search by **name or code**.
-- Selectable test rows with `aria-pressed`, keyboard-accessible controls and a visible selection count.
-- Selected-test chips with individually labeled remove actions and a `Clear all tests` option.
-- Explicit `Package only` text for tests with a `null` individual price (not a zero-price claim).
-- A mobile layout with breakpoints, including a 375 px target. Visual verification at that width still needs to be completed locally.
-- Retry for catalog fetch errors, with an `AbortController` to clean up abandoned requests.
+#### HTTP Performance Benchmark
 
-Search and toggle logic lives in the pure `frontend/src/selection.ts` helper and has nine automated tests. The UI also calls `POST /api/plan` and displays the resulting quote (see next section).
+Performance was measured against the locally running production-built NestJS backend using Node.js `fetch` and `performance.now()`.
 
-```bash
-cd frontend
-npm install
-npm test       # 9 frontend selection tests; Node.js 22+ needed
-npm run build  # TypeScript check and Vite production build
-npm run dev
-```
+Each scenario was executed with 10 warm-up requests followed by 100 measured HTTP requests.
 
-The pure helper tests and isolated TypeScript check passed in the development environment. Complete frontend build/browser checks must be performed locally because npm dependency installation was unavailable in that environment.
+| Test scenario | Average | P95 | Maximum |
+|---|---:|---:|---:|
+| Single test | 2.23 ms | 3.10 ms | 4.89 ms |
+| Four selected tests | 2.17 ms | 3.07 ms | 4.48 ms |
+| Package-only test | 2.24 ms | 3.50 ms | 4.94 ms |
+| All 19 selectable tests | 7.38 ms | 10.71 ms | 19.70 ms |
 
+All measured requests completed below the required 300 ms response-time threshold. The highest recorded latency was **19.70 ms**.
 
-## Live recommendations (Commit 6)
+These results reflect local sequential HTTP testing and may vary with hardware, server load, network conditions, and other test selections.
 
-After selecting a test, the frontend sends `POST /api/plan` with the selected test IDs in their original order. The plan review panel shows:
+#### Scalability with 40 Packages
 
-- Lowest-priced combination of package(s) and individual test(s), including each item's individual cost and which selected tests it covers.
-- Optional **Also included** bonus tests supplied by packages, resolved to their catalog names.
-- Total and, when known and positive, savings compared with buying tests individually. Savings of zero or unknown (`null`) are not shown. If `individualTotal` is `null`, the panel explains why comparison is unavailable.
-- Distinct loading, empty-selection, backend error and retry states. API `EMPTY_SELECTION`, `INVALID_TESTS`, and `NOT_AVAILABLE` error codes are translated into user-facing language.
+With 40 relevant packages, exhaustive subset enumeration would require evaluating up to approximately 1.1 trillion combinations (`2^40`). This would be computationally impractical.
 
-**Stale-response protection:** `frontend/src/planner.ts` implements an abortable `createLatestPlanRunner`, which invalidates earlier request generations on each new selection. Its sequence check ignores obsolete results **even if a mocked or real network transport fails to honor abort**. `App.tsx` additionally keys displayed results to `JSON.stringify(selectedIds)` so an old quote is never shown while React effects are catching up. Requests are cancelled on unmount and when the selection is empty.
+For a larger catalog, the optimization strategy would need to change. Possible approaches include:
 
-**Frontend tests:** `npm test` runs 21 tests: the original nine selection checks and twelve new planner/request checks. The new checks include parsing all three supplied MedEx expected result objects as API responses, a 422 error, malformed payload, network failure, and out-of-order response/rejection handling. They do not replace manual browser or actual backend integration testing.
+- Dynamic programming over selected-test coverage states.
+- Branch-and-bound search to eliminate combinations that cannot improve the current best solution.
+- Additional preprocessing to remove dominated package options while preserving the required tie-breaking behavior.
 
-Run both apps and test these selections:
+The current implementation intentionally targets the supplied dataset and limits exhaustive enumeration to 20 relevant packages.
 
-| Test IDs | Expected plan | Total | Savings |
+## Catalog assumptions and data cleanup
+
+The supplied `data/lab-catalog.json` is kept unchanged. Normalization is applied in memory:
+
+- Remove duplicate test references inside a package, preserving first occurrence.
+- Ignore nonexistent package test references (for example `P12` references `T99`).
+- Exclude inactive test references from package coverage.
+- Exclude inactive tests (`T19`) from selection and inactive packages (`P10`) from sale.
+- Omit packages with no valid test references after cleanup.
+- Keep valid `price: null` tests selectable; these must be purchased through a package.
+- Reject malformed catalog entities and duplicate entity IDs instead of silently guessing.
+
+## Frontend behavior
+
+The React interface supports searchable test selection by name or code, removable selected-test chips, package-only labels, and live recommendations. The recommendation panel shows each purchased item, its price, the selected tests it covers, any bonus tests, the lowest total, and positive savings where comparable. If individual purchase is impossible, the UI explains that savings cannot be calculated.
+
+Loading, empty, API error, and retry states are handled explicitly. On each new selection, the UI cancels the prior request and uses a request-generation check so an older response cannot overwrite a newer one, even if cancellation is ignored by the network transport. The prior quote is hidden immediately when the selection changes. Layout and main interactions were manually checked at a mobile width of 375 px.
+
+## Test cases
+
+The automated tests cover **all three supplied expected-output examples**, with additional tests for catalog irregularities, selection deduplication, unavailable tests, ranking/tie-break rules, API validation, and frontend request ordering.
+
+Sample cases from the provided data:
+
+| Selected test IDs | Expected plan | Total | Savings |
 | --- | --- | ---: | ---: |
 | `T02, T03, T04, T06` | `P02` | ฿1,500 | ฿320 |
 | `T01, T02, T03, T04, T05, T06, T07` | `P02` + individual `T01`, `T05`, `T07` | ฿2,850 | ฿320 |
-| `T15` | `P08`, includes bonus `T14` | ฿900 | Unknown (package-only) |
+| `T15` | `P08` (also includes `T14`) | ฿900 | Not comparable |
 
-Try rapidly selecting and removing tests, triggering a network error by stopping the backend, retrying after restart and checking the UI at **375 px**. Confirm all prior backend integration tests still pass. 
+Run `npm test` in both `backend/` and `frontend/` to reproduce the automated checks.
 
-## AI-assistance disclosure
+## Limitations and next improvements
 
-ChatGPT assisted with initial scaffolding, project structure, catalog loading/normalization, the initial planner implementation, NestJS API integration, validation and test cases, responsive React catalog selection UI, frontend selection tests, live React planner integration, API response guards, stale-request handling, frontend planner tests, and README updates. Subsequent AI use will be documented here as work progresses. The applicant will review, test and explain the submitted code.
+- The exact optimizer is sized for the provided catalog, not an unrestricted 40-package marketplace.
+- A dedicated end-to-end HTTP performance benchmark is still needed to demonstrate the 300 ms target consistently.
+- Automated browser E2E testing (for example, Playwright) would further strengthen interaction and accessibility coverage.
+- A production catalog would benefit from persistent storage, catalog update workflows, and operational monitoring.
+
+## AI assistance disclosure
+
+ChatGPT was used throughout development to assist with project scaffolding, implementation of the optimization algorithm, API and frontend components, test generation, debugging, and documentation.
+The implementation was developed incrementally with Git commits and pull requests. I reviewed and tested the application locally, verified the supplied assessment examples, resolved integration issues, and validated the frontend and backend builds.
+
+I understand the implementation decisions and i,m prepared to explain the solution, discuss trade-offs, and modify the code during the technical interview.
 
 ## Development history
 
-Each working, verified milestone should be committed individually as it occurs. Existing completed starter code is a reference, **not** a source of retrospectively fabricated commit history.
+The Git commit history and feature pull requests show the progression from the initial scaffold through catalog normalization, bundle optimization, API integration, test selection, live recommendations, and fixes. Each milestone was committed as actual project work rather than recreating artificial history.
