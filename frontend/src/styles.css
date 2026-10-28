@@ -115,3 +115,38 @@ h2 { font-size: 1.43rem; margin: 0; letter-spacing: -.035em; line-height: 1.3; }
   .package-only { font-size: .65rem; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .test-row { transition: none; } }
+
+/* Live quote: designed to remain readable in the existing narrow sidebar. */
+.plan-review { margin-top: 22px; border: 1px solid #d9e9df; background: #f6faf7; border-radius: 14px; padding: 18px; }
+.plan-heading { display: flex; align-items: flex-start; gap: 8px; justify-content: space-between; }
+.plan-heading h3 { font-size: 1.05rem; letter-spacing: -.025em; margin: 0 0 15px; }
+.plan-ready { color: #16745d; background: #e1f3e7; font-size: .64rem; font-weight: 750; white-space: nowrap; border-radius: 12px; padding: 5px 8px; }
+.plan-hint, .plan-status { color: #6d887b; font-size: .83rem; line-height: 1.6; }
+.plan-status { display: flex; align-items: center; gap: 10px; padding: 20px 0 8px; }
+.plan-status .spinner { height: 20px; width: 20px; margin: 0; border-width: 2px; flex: 0 0 20px; }
+.plan-error { background: #fffafb; border: 1px solid #efdee0; border-radius: 10px; padding: 14px; }
+.plan-error strong { color: #9e364a; font-size: .86rem; }
+.plan-error p { margin: 8px 0 0; color: #755a60; font-size: .81rem; line-height: 1.55; }
+.plan-error .retry-button { margin-top: 12px; }
+.plan-total { border-radius: 12px; padding: 15px 16px; background: #0c7763; color: white; display: grid; gap: 4px; }
+.plan-total > span:first-child { font-size: .73rem; opacity: .87; }
+.plan-total > strong { font-size: 1.9rem; letter-spacing: -.045em; line-height: 1.3; }
+.savings-pill { background: #d6f5df; color: #18583d; padding: 5px 9px; border-radius: 20px; font-size: .75rem; font-weight: 750; justify-self: start; margin-top: 4px; }
+.plan-result h4 { font-size: .79rem; letter-spacing: .035em; text-transform: uppercase; color: #536f60; margin: 21px 0 10px; }
+.plan-item-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.plan-item { padding: 12px; border-radius: 10px; border: 1px solid #dfece3; background: white; }
+.plan-item-top { display: flex; justify-content: space-between; gap: 9px; }
+.plan-item-top > div { display: grid; gap: 5px; min-width: 0; }
+.plan-item-top strong { font-size: .83rem; line-height: 1.4; }
+.item-type { color: #29816b; text-transform: uppercase; font-size: .64rem; letter-spacing: .05em; font-weight: 750; }
+.item-price { text-align: right; white-space: nowrap; }
+.plan-item p { color: #70857a; font-size: .76rem; line-height: 1.6; margin: 8px 0 0; overflow-wrap: anywhere; }
+.covers-label { font-weight: 700; color: #506d5c; }
+.extra-tests { margin-top: 12px; padding: 12px; background: #e8f5ed; border: 1px solid #d2eadd; border-radius: 10px; }
+.extra-tests strong { color: #287257; font-size: .77rem; }
+.extra-tests p { color: #537866; margin: 5px 0 0; line-height: 1.5; font-size: .76rem; overflow-wrap: anywhere; }
+.plan-price-breakdown { border-top: 1px solid #d4e6da; margin-top: 15px; padding-top: 12px; display: grid; gap: 10px; font-size: .78rem; }
+.plan-price-breakdown > div { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.plan-price-breakdown > p { color: #637e6f; font-size: .75rem; line-height: 1.5; margin: 0; }
+.breakdown-grand-total { padding-top: 10px; border-top: 1px solid #d4e6da; color: #163f32; font-size: .89rem; }
+@media (max-width: 520px) { .plan-review { padding: 13px; } .plan-total > strong { font-size: 1.65rem; } }

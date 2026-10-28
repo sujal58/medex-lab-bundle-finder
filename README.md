@@ -1,6 +1,6 @@
 # MedEx — Lab Test Bundle Finder
 
-Full-stack take-home assessment, **Task 1**. Work in progress: the catalog API, exact optimizer, planning API and lab-test selection frontend are implemented; live plan display is the next milestone.
+Full-stack take-home assessment, **Task 1**. Work in progress: the catalog API, exact optimizer, planning API and live React recommendation display are implemented; final integrated verification and accessibility/performance checks remain.
 
 ## Progress
 
@@ -12,8 +12,9 @@ Full-stack take-home assessment, **Task 1**. Work in progress: the catalog API, 
 - [x] Add all three official fixture tests and algorithm edge-case tests
 - [x] Expose and validate `POST /api/plan` through NestJS
 - [x] Build accessible test search, selected-test chips, removal, empty/loading/catalog error states and retry
-- [ ] Connect live optimization requests, explain plans, and handle stale responses and planning errors
-- [ ] Verify performance, accessibility, responsive layout and README
+- [x] Connect live optimization requests, explain packages/coverage/bonuses/total/savings
+- [x] Handle stale responses, network/planner errors and retries in the frontend
+- [ ] Verify the full app in a browser, performance, accessibility and 375 px layout
 
 ## Project layout
 
@@ -39,7 +40,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`. Vite proxies `/api/*` requests to `http://localhost:3001`; the test-selection UI currently calls `GET /api/tests`. The planner summary is intentionally a placeholder until the next milestone. The original `GET /api/health` endpoint remains for development diagnostics only.
+Open `http://localhost:5173`. Vite proxies `/api/*` requests to `http://localhost:3001`; the frontend calls both `GET /api/tests` and `POST /api/plan` when tests are selected. The original `GET /api/health` endpoint remains for development diagnostics only.
 
 ## API
 
@@ -51,7 +52,7 @@ The implementation must reproduce the exact supplied expected outputs and use th
 
 ## Assumptions and limitations
 
-Current stage implements catalog loading, both catalog endpoints, the pure optimizer, `POST /api/plan`, and a responsive search/selection interface. The **plan display is not connected yet**: the right panel does not display calculated prices, package recommendations or savings. These will be added as the next milestone.
+Current stage implements catalog loading, both catalog endpoints, the pure optimizer, `POST /api/plan`, and a responsive test-selection UI with live recommendations. Further browser integration, accessibility and performance verification are still required.
 
 Catalog handling assumptions:
 - Ignore repeated test references inside a package, preserving the first occurrence and original order.
@@ -136,7 +137,7 @@ Expected: **35 checks** — nine catalog normalization checks, 16 planner checks
 - A mobile layout with breakpoints, including a 375 px target. Visual verification at that width still needs to be completed locally.
 - Retry for catalog fetch errors, with an `AbortController` to clean up abandoned requests.
 
-Search and toggle logic lives in the pure `frontend/src/selection.ts` helper and has nine automated tests. The UI deliberately does **not** call `POST /api/plan` yet; that integration (including preventing stale responses from overwriting new ones) will be implemented in the next commit.
+Search and toggle logic lives in the pure `frontend/src/selection.ts` helper and has nine automated tests. The UI also calls `POST /api/plan` and displays the resulting quote (see next section).
 
 ```bash
 cd frontend
@@ -146,11 +147,35 @@ npm run build  # TypeScript check and Vite production build
 npm run dev
 ```
 
-The unit tests and isolated helper TypeScript check passed in the development environment. Complete frontend build/browser checks must be performed locally because npm dependencies were unavailable in that environment.
+The pure helper tests and isolated TypeScript check passed in the development environment. Complete frontend build/browser checks must be performed locally because npm dependency installation was unavailable in that environment.
+
+
+## Live recommendations (Commit 6)
+
+After selecting a test, the frontend sends `POST /api/plan` with the selected test IDs in their original order. The plan review panel shows:
+
+- Lowest-priced combination of package(s) and individual test(s), including each item's individual cost and which selected tests it covers.
+- Optional **Also included** bonus tests supplied by packages, resolved to their catalog names.
+- Total and, when known and positive, savings compared with buying tests individually. Savings of zero or unknown (`null`) are not shown. If `individualTotal` is `null`, the panel explains why comparison is unavailable.
+- Distinct loading, empty-selection, backend error and retry states. API `EMPTY_SELECTION`, `INVALID_TESTS`, and `NOT_AVAILABLE` error codes are translated into user-facing language.
+
+**Stale-response protection:** `frontend/src/planner.ts` implements an abortable `createLatestPlanRunner`, which invalidates earlier request generations on each new selection. Its sequence check ignores obsolete results **even if a mocked or real network transport fails to honor abort**. `App.tsx` additionally keys displayed results to `JSON.stringify(selectedIds)` so an old quote is never shown while React effects are catching up. Requests are cancelled on unmount and when the selection is empty.
+
+**Frontend tests:** `npm test` runs 21 tests: the original nine selection checks and twelve new planner/request checks. The new checks include parsing all three supplied MedEx expected result objects as API responses, a 422 error, malformed payload, network failure, and out-of-order response/rejection handling. They do not replace manual browser or actual backend integration testing.
+
+Run both apps and test these selections:
+
+| Test IDs | Expected plan | Total | Savings |
+| --- | --- | ---: | ---: |
+| `T02, T03, T04, T06` | `P02` | ฿1,500 | ฿320 |
+| `T01, T02, T03, T04, T05, T06, T07` | `P02` + individual `T01`, `T05`, `T07` | ฿2,850 | ฿320 |
+| `T15` | `P08`, includes bonus `T14` | ฿900 | Unknown (package-only) |
+
+Try rapidly selecting and removing tests, triggering a network error by stopping the backend, retrying after restart and checking the UI at **375 px**. Confirm all prior backend integration tests still pass. 
 
 ## AI-assistance disclosure
 
-ChatGPT assisted with initial scaffolding, project structure, catalog loading/normalization, the initial planner implementation, NestJS API integration, validation and test cases, responsive React catalog selection UI, frontend selection tests, and README updates. Subsequent AI use will be documented here as work progresses. The applicant will review, test and explain the submitted code.
+ChatGPT assisted with initial scaffolding, project structure, catalog loading/normalization, the initial planner implementation, NestJS API integration, validation and test cases, responsive React catalog selection UI, frontend selection tests, live React planner integration, API response guards, stale-request handling, frontend planner tests, and README updates. Subsequent AI use will be documented here as work progresses. The applicant will review, test and explain the submitted code.
 
 ## Development history
 

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createLatestPlanRunner, formatBaht } from './planner';
+import type { PlanResult } from './planner';
 import { filterTests, isLabTest, toggleTestSelection } from './selection';
 import type { LabTest } from './selection';
 
 type RequestStatus = 'loading' | 'success' | 'error';
 
-const money = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'THB',
-  maximumFractionDigits: 0,
-});
+type PlanState =
+  | { key: string; status: 'loading' }
+  | { key: string; status: 'success'; result: PlanResult }
+  | { key: string; status: 'error'; message: string };
+
 
 export default function App() {
   const [tests, setTests] = useState<LabTest[]>([]);
@@ -17,6 +19,28 @@ export default function App() {
   const [retryCount, setRetryCount] = useState(0);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [planState, setPlanState] = useState<PlanState | null>(null);
+  const [planRetry, setPlanRetry] = useState(0);
+  const planRunner = useMemo(() => createLatestPlanRunner(), []);
+  const selectionKey = JSON.stringify(selectedIds);
+
+  useEffect(() => {
+    if (requestStatus !== 'success' || selectedIds.length === 0) {
+      planRunner.cancel();
+      return;
+    }
+    const key = selectionKey;
+    setPlanState({ key, status: 'loading' });
+    planRunner.start(selectedIds, {
+      onSuccess: (result) => setPlanState({ key, status: 'success', result }),
+      onError: (message) => setPlanState({ key, status: 'error', message }),
+    });
+    return () => planRunner.cancel();
+  }, [selectionKey, planRetry, requestStatus, planRunner]);
+
+  // Never display a quote for a previous selection, not even while effects update.
+  const visiblePlan = requestStatus === 'success' && selectedIds.length > 0 &&
+    planState?.key === selectionKey ? planState : null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -55,6 +79,9 @@ export default function App() {
     [tests, selectedIds],
   );
 
+  const namesById = useMemo(() => new Map(tests.map((test) => [test.id, test.name])), [tests]);
+  const testName = (id: string) => namesById.get(id) ?? id;
+
   function toggle(id: string) {
     setSelectedIds((current) => toggleTestSelection(current, id));
   }
@@ -76,10 +103,10 @@ export default function App() {
           <p>Find the lab tests you need. We'll help you discover the most affordable way to book them together.</p>
         </div>
 
-        <div className="step-indicator" aria-label="Progress: selecting tests">
+        <div className="step-indicator" aria-label="Choose tests and review the recommended plan">
           <span className="step step-current"><span className="step-number">1</span> Choose tests</span>
           <span className="step-divider" aria-hidden="true" />
-          <span className="step step-upcoming"><span className="step-number">2</span> Review best plan</span>
+          <span className={`step ${visiblePlan?.status === 'success' ? 'step-current' : 'step-upcoming'}`}><span className="step-number">2</span> Review best plan</span>
         </div>
 
         <div className="workspace">
@@ -161,7 +188,7 @@ export default function App() {
                               <span className="test-title">{test.name}</span>
                               <span className="test-code">{test.code}</span>
                             </span>
-                            <span className="test-price">{test.price === null ? <span className="package-only">Package only</span> : money.format(test.price)}</span>
+                            <span className="test-price">{test.price === null ? <span className="package-only">Package only</span> : formatBaht(test.price)}</span>
                           </button>
                         </li>
                       );
@@ -206,11 +233,70 @@ export default function App() {
               </>
             )}
 
-            <div className="upcoming-plan">
-              <span className="upcoming-label">Next step</span>
-              <strong>Best-value bundle plan</strong>
-              <p>Live price optimization and savings will appear here once the planner is connected in the next milestone.</p>
-            </div>
+            <section className="plan-review" aria-labelledby="plan-title" aria-live="polite" aria-busy={visiblePlan?.status === 'loading'}>
+              <div className="plan-heading">
+                <div>
+                  <p className="section-eyebrow">Step 02 · Live calculation</p>
+                  <h3 id="plan-title">Best-value plan</h3>
+                </div>
+                {visiblePlan?.status === 'success' && <span className="plan-ready">Best available</span>}
+              </div>
+
+              {selectedIds.length === 0 && (
+                <div className="plan-hint">Select a lab test to see the cheapest combination of packages and individual tests.</div>
+              )}
+              {selectedIds.length > 0 && (visiblePlan === null || visiblePlan.status === 'loading') && (
+                <div className="plan-status" role="status"><span className="spinner" aria-hidden="true" /> Finding your lowest price…</div>
+              )}
+              {visiblePlan?.status === 'error' && (
+                <div className="plan-error" role="alert">
+                  <strong>Unable to calculate a plan</strong>
+                  <p>{visiblePlan.message}</p>
+                  <button type="button" className="retry-button" onClick={() => setPlanRetry((value) => value + 1)}>Try again</button>
+                </div>
+              )}
+              {visiblePlan?.status === 'success' && (
+                <div className="plan-result">
+                  <div className="plan-total">
+                    <span>Lowest total</span>
+                    <strong>{formatBaht(visiblePlan.result.total)}</strong>
+                    {visiblePlan.result.savings !== null && visiblePlan.result.savings > 0 && (
+                      <span className="savings-pill">Save {formatBaht(visiblePlan.result.savings)}</span>
+                    )}
+                  </div>
+
+                  <h4>Recommended purchases</h4>
+                  <ul className="plan-item-list" aria-label="Recommended packages and tests">
+                    {visiblePlan.result.items.map((item) => (
+                      <li key={`${item.type}-${item.id}`} className="plan-item">
+                        <div className="plan-item-top">
+                          <div>
+                            <span className="item-type">{item.type === 'package' ? 'Package' : 'Individual test'}</span>
+                            <strong>{item.name}</strong>
+                          </div>
+                          <strong className="item-price">{formatBaht(item.price)}</strong>
+                        </div>
+                        <p><span className="covers-label">Covers:</span> {item.covers.map(testName).join(', ')}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  {visiblePlan.result.extraTests.length > 0 && (
+                    <div className="extra-tests">
+                      <strong>Also included at no extra cost</strong>
+                      <p>{visiblePlan.result.extraTests.map(testName).join(', ')}</p>
+                    </div>
+                  )}
+                  <div className="plan-price-breakdown">
+                    {visiblePlan.result.individualTotal !== null ? (
+                      <div><span>Individual purchase total</span><span>{formatBaht(visiblePlan.result.individualTotal)}</span></div>
+                    ) : (
+                      <p>Individual comparison unavailable: at least one selected test is package-only.</p>
+                    )}
+                    <div className="breakdown-grand-total"><span>Your plan total</span><strong>{formatBaht(visiblePlan.result.total)}</strong></div>
+                  </div>
+                </div>
+              )}
+            </section>
           </aside>
         </div>
         <footer className="footer">MedEx technical assessment · Prices shown in Thai baht (THB)</footer>
